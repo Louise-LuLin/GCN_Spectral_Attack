@@ -10,7 +10,7 @@ For example: python: 3.7, pytorch: 1.5.0+cu101
 You can train and save a clean model; attack a loaded model in both training time (poisoning attack) and test time (evasion attack). The following commands are run under the root folder.
 
 #### Train a Natural Model
-<code> python -m nat_train --dataset cora --gcn_epochs 200 --lr 0.01 --model_dir ./nat_model_saved/ </code>
+<code> python -m nat_train --dataset cora --gnn_epochs 200 --lr 0.01 --model_dir ./nat_model_saved/ </code>
 
 #### Attack a Trained Model
 - evasion attack:
