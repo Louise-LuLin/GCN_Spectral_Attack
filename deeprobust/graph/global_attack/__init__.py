@@ -6,6 +6,7 @@ from .topology_attack import MinMax, PGDAttack
 from .node_embedding_attack import NodeEmbeddingAttack, OtherNodeEmbeddingAttack
 from .nipa import NIPA
 from .spectral_attack import SpectralAttack, MinMaxSpectral
+from .ig_attack import IGAttack
 
 __all__ = ['BaseAttack', 
            'DICE', 
@@ -18,4 +19,5 @@ __all__ = ['BaseAttack',
            'NodeEmbeddingAttack', 
            'OtherNodeEmbeddingAttack',
            'SpectralAttack',
-           'MinMaxSpectral']
+           'MinMaxSpectral',
+           'IGAttack']
