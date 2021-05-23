@@ -10,7 +10,7 @@ import pickle as pkl
 from deeprobust.graph.gnns import GCN
 from deeprobust.graph.utils import *
 from deeprobust.graph.data import Dataset
-from myutils import calc_acc
+from deeprobust.graph.myutils import calc_acc
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--device', type=int, default=0, 
@@ -26,7 +26,7 @@ parser.add_argument('--dataset', type=str, default='cora',
 
 parser.add_argument('--gnn_base', type=str, default='gcn', 
                     choices=['gcn', 'gat'], help='base gnn models.')
-parser.add_argument('--gnn_epochs', type=int, default=200,
+parser.add_argument('--gnn_epochs', type=int, default=500,
                     help='Number of epochs to train the gnn.')
 
 parser.add_argument('--lr', type=float, default=0.01,
@@ -111,7 +111,7 @@ def main():
     # Save the trained model
     if not osp.exists(args.model_dir):
         os.makedirs(args.model_dir)
-    path = args.model_dir + '{}_{}.pt'.format(args.dataset, args.gnn_base)
+    path = args.model_dir + '{}_{}_{}.pt'.format(args.dataset, args.gnn_base, args.data_seed)
     torch.save(nat_model.state_dict(), path)
     
 if __name__ == '__main__':
