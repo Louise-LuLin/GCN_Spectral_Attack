@@ -43,7 +43,7 @@ parser.add_argument('--ptb_rate', type=float, default=0.05,
                     help='pertubation rate')
 parser.add_argument('--reg_weight', type=float, default=0.0,  
                     help='regularization weight')
-parser.add_argument('--reduction', type=str, default='mean',  
+parser.add_argument('--reduction', type=str, default='sum',  # this is important to take sum for eigenvalue mse
                     help='eigenvalue mse reduction type')                   
 
 parser.add_argument('--weight_decay', type=float, default=5e-4,
