@@ -14,6 +14,8 @@ from tqdm import tqdm
 from deeprobust.graph import utils
 from deeprobust.graph.global_attack import BaseAttack
 
+from deeprobust.graph.myutils import calc_acc, save_all
+
 class SpectralAttack(BaseAttack):
     """
     Spectral attack for graph data.
@@ -29,7 +31,7 @@ class SpectralAttack(BaseAttack):
                  feature_shape=None,
                  attack_structure=True, 
                  attack_features=False,
-                 regularization_weight=5.0,
+                 regularization_weight=0.0,
                  device='cpu'):
         
         super(SpectralAttack, self).__init__(model, 
@@ -55,7 +57,9 @@ class SpectralAttack(BaseAttack):
 
         self.complementary = None
 
-    def attack(self, ori_features, ori_adj, labels, idx_train, n_perturbations, epochs=200, **kwargs):
+    def attack(self, ori_features, ori_adj, labels, idx_target, idx_train, idx_test,
+               n_perturbations, att_lr,  epochs=200,
+               verbose=False, reduction='mean', **kwargs):
         """
         Generate perturbations on the input graph
         """
@@ -64,36 +68,56 @@ class SpectralAttack(BaseAttack):
 
         self.sparse_features = sp.issparse(ori_features)
         ori_adj, ori_features, labels = utils.to_tensor(ori_adj, ori_features, labels, device=self.device)
+        ori_adj_norm = utils.normalize_adj_tensor(ori_adj, device=self.device)
+        ori_e, ori_v = torch.symeig(ori_adj_norm, eigenvectors=True)
 
         victim_model.eval()
-        for t in tqdm(range(epochs)):
+        for t in tqdm(range(epochs), desc='Perturb Adj'):
             modified_adj = self.get_modified_adj(ori_adj)
             adj_norm = utils.normalize_adj_tensor(modified_adj, device=self.device)
-            output = victim_model(ori_features, adj_norm)
-            self.loss = self._loss(output[idx_train], labels[idx_train])
+            output = victim_model(ori_features, adj_norm) # forward of gcn need to normalize adj first
+            self.loss = self._loss(output[idx_target], labels[idx_target])
 
             # New: add regularization term for spectral distance
+            eigen_mse = 0
+            eigen_norm = self.norm = torch.norm(ori_e)
             if self.regularization_weight != 0:
-                ori_adj_norm = utils.normalize_adj_tensor(ori_adj, device=self.device)
-                ori_e, ori_v = torch.symeig(ori_adj_norm, eigenvectors=True)
                 e, v = torch.symeig(adj_norm, eigenvectors=True)
-                self.regularization = F.mse_loss(ori_e, e)
-                self.norm = torch.norm(ori_e)
-                self.loss += self.regularization / self.norm * self.regularization_weight
+                eigen_mse = F.mse_loss(ori_e, e, reduction=reduction)
+            reg_loss = eigen_mse / eigen_norm * self.regularization_weight
 
+            if verbose and t%10 == 0:
+                print ('-- Epoch {}, '.format(t), 
+                       'classification loss = {:.4f} | '.format(self.loss.item()),
+                       'reg loss = {:.8f} | '.format(reg_loss),
+                       'eigen_mse = {:.8f} | '.format(eigen_mse),
+                       'eigen_norm = {:.4f}'.format(eigen_norm))
+
+                loss_test, acc_test = calc_acc(output, labels, idx_test)
+                loss_train, acc_train = calc_acc(output, labels, idx_train)
+
+                print("-- Before final discretize: train loss = {:.4f} | ".format(loss_train),
+                    "train acc = {:.4f} | ".format(acc_train),
+                    "test loss = {:.4f} | ".format(loss_test),
+                    "test acc = {:.4f} | ".format(acc_test))
+
+                
+            self.loss += reg_loss
             adj_grad = torch.autograd.grad(self.loss, self.adj_changes)[0]
 
             if self.loss_type == 'CE':
-                lr = 200 / np.sqrt(t+1)
+                # lr = 200 / np.sqrt(t+1)
+                lr = att_lr / np.sqrt(t+1)
                 self.adj_changes.data.add_(lr * adj_grad)
 
             if self.loss_type == 'CW':
-                lr = 0.1 / np.sqrt(t+1)
+                # lr = 0.1 / np.sqrt(t+1)
+                lr = att_lr / np.sqrt(t+1)
                 self.adj_changes.data.add_(lr * adj_grad)
             
             self.projection(n_perturbations)
 
-        self.random_sample(ori_adj, ori_features, labels, idx_train, n_perturbations)
+        self.random_sample(ori_adj, ori_features, labels, idx_target, n_perturbations)
         self.modified_adj = self.get_modified_adj(ori_adj).detach()
         self.check_adj_tensor(self.modified_adj)
 
@@ -111,7 +135,7 @@ class SpectralAttack(BaseAttack):
         self.v = v
 
 
-    def random_sample(self, ori_adj, ori_features, labels, idx_train, n_perturbations):
+    def random_sample(self, ori_adj, ori_features, labels, idx_target, n_perturbations):
         K = 10
         best_loss = -1000
         victim_model = self.surrogate
@@ -131,8 +155,8 @@ class SpectralAttack(BaseAttack):
                 modified_adj = self.get_modified_adj(ori_adj)
                 adj_norm = utils.normalize_adj_tensor(modified_adj, device=self.device)
                 output = victim_model(ori_features, adj_norm)
-                loss = self._loss(output[idx_train], labels[idx_train])
-                # loss = F.nll_loss(output[idx_train], labels[idx_train])
+                loss = self._loss(output[idx_target], labels[idx_target])
+                # loss = F.nll_loss(output[idx_target], labels[idx_target])
                 # print(loss)
                 if best_loss < loss:
                     best_loss = loss
@@ -166,7 +190,7 @@ class SpectralAttack(BaseAttack):
             loss = F.nll_loss(output, labels)
         if self.loss_type == "CW":
             onehot = utils.tensor2onehot(labels)
-            best_second_class = (output - 1000*onehot).argmax(1)
+            best_second_class = (output - 1000*onehot).argmax(1).detach()
             margin = output[np.arange(len(output)), labels] - \
                    output[np.arange(len(output)), best_second_class]
             k = 0
@@ -254,8 +278,9 @@ class MinMaxSpectral(SpectralAttack):
                                              regularization_weight, 
                                              device=device)
 
-    def attack(self, ori_features, ori_adj, labels, idx_train, 
-               n_perturbations, epochs=200, **kwargs):
+    def attack(self, ori_features, ori_adj, labels, idx_target, idx_train, idx_test,
+               n_perturbations, att_lr, epochs=200, 
+               verbose=False, reduction='mean', **kwargs):
         """Generate perturbations on the input graph.
 
         Parameters
@@ -280,6 +305,8 @@ class MinMaxSpectral(SpectralAttack):
 
         self.sparse_features = sp.issparse(ori_features)
         ori_adj, ori_features, labels = utils.to_tensor(ori_adj, ori_features, labels, device=self.device)
+        ori_adj_norm = utils.normalize_adj_tensor(ori_adj, device=self.device)
+        ori_e, ori_v = torch.symeig(ori_adj_norm, eigenvectors=True)
 
         # optimizer
         optimizer = optim.Adam(victim_model.parameters(), lr=0.01)
@@ -291,7 +318,7 @@ class MinMaxSpectral(SpectralAttack):
             modified_adj = self.get_modified_adj(ori_adj)
             adj_norm = utils.normalize_adj_tensor(modified_adj)
             output = victim_model(ori_features, adj_norm)
-            loss = self._loss(output[idx_train], labels[idx_train])
+            loss = self._loss(output[idx_target], labels[idx_target])
 
             optimizer.zero_grad()
             loss.backward()
@@ -302,32 +329,49 @@ class MinMaxSpectral(SpectralAttack):
             modified_adj = self.get_modified_adj(ori_adj)
             adj_norm = utils.normalize_adj_tensor(modified_adj)
             output = victim_model(ori_features, adj_norm)
-            self.loss = self._loss(output[idx_train], labels[idx_train])
+            self.loss = self._loss(output[idx_target], labels[idx_target])
 
             # New: add regularization term for spectral distance
+            eigen_mse = 0
+            eigen_norm = self.norm = torch.norm(ori_e)
             if self.regularization_weight != 0:
-                ori_adj_norm = utils.normalize_adj_tensor(ori_adj, device=self.device)
-                ori_e, ori_v = torch.symeig(ori_adj_norm, eigenvectors=True)
                 e, v = torch.symeig(adj_norm, eigenvectors=True)
-                self.regularization = F.mse_loss(ori_e, e)
-                self.norm = torch.norm(ori_e)
-                self.loss += self.regularization / self.norm * self.regularization_weight
+                eigen_mse = F.mse_loss(ori_e, e, reduction=reduction)
+            reg_loss = eigen_mse / eigen_norm * self.regularization_weight
 
+            if verbose and t%10 == 0:
+                print ('Epoch {}, '.format(t), 
+                       'classification loss = {:.4f} | '.format(self.loss.item()),
+                       'reg loss = {:.8f} | '.format(reg_loss),
+                       'eigen_mse = {:.8f} | '.format(eigen_mse),
+                       'eigen_norm = {:.4f}'.format(eigen_norm))
+
+                loss_test, acc_test = calc_acc(output, labels, idx_test)
+                loss_train, acc_train = calc_acc(output, labels, idx_train)
+
+                print("-- Before final discretize: train loss = {:.4f} | ".format(loss_train),
+                    "train acc = {:.4f} | ".format(acc_train),
+                    "test loss = {:.4f} | ".format(loss_test),
+                    "test acc = {:.4f} | ".format(acc_test))
+                
+            self.loss += reg_loss
             adj_grad = torch.autograd.grad(self.loss, self.adj_changes)[0]
             # adj_grad = self.adj_changes.grad
 
             if self.loss_type == 'CE':
-                lr = 200 / np.sqrt(t+1)
+                # lr = 200 / np.sqrt(t+1)
+                lr = att_lr / np.sqrt(t+1)
                 self.adj_changes.data.add_(lr * adj_grad)
 
             if self.loss_type == 'CW':
-                lr = 0.1 / np.sqrt(t+1)
+                # lr = 0.1 / np.sqrt(t+1)
+                lr = att_lr / np.sqrt(t+1)
                 self.adj_changes.data.add_(lr * adj_grad)
 
             # self.adj_changes.grad.zero_()
             self.projection(n_perturbations)
 
-        self.random_sample(ori_adj, ori_features, labels, idx_train, n_perturbations)
+        self.random_sample(ori_adj, ori_features, labels, idx_target, n_perturbations)
         self.modified_adj = self.get_modified_adj(ori_adj).detach()
         self.check_adj_tensor(self.modified_adj)
 

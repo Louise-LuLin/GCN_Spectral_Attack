@@ -343,7 +343,9 @@ class GCN(nn.Module):
                 self.adj_norm = utils.normalize_adj_tensor(adj, sparse=True, device=self.device)
             else:
                 self.adj_norm = utils.normalize_adj_tensor(adj, device=self.device)
-            return self.forward(self.features, self.adj_norm)
+            output = self.forward(self.features, self.adj_norm)
+            self.output = output
+            return output
 
 
 

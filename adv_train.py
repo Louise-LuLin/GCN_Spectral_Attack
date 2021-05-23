@@ -13,7 +13,7 @@ from deeprobust.graph.global_attack import SpectralAttack, MinMaxSpectral
 from deeprobust.graph.targeted_attack import Nettack
 from deeprobust.graph.utils import *
 from deeprobust.graph.data import Dataset, PtbDataset
-from myutils import calc_acc, save_all
+from deeprobust.graph.myutils import calc_acc, save_all
 
 parser = argparse.ArgumentParser()
 
@@ -39,7 +39,7 @@ parser.add_argument('--reg_weight', type=float, default=0.0,
                     help='regularization weight')
 
 
-parser.add_argument('--lr', type=float, default=0.01,
+parser.add_argument('--lr', type=float, default=0.001,
                     help='Initial learning rate.')
 parser.add_argument('--weight_decay', type=float, default=5e-4,
                     help='Weight decay (L2 loss on parameters).')
