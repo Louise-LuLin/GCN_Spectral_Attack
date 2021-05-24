@@ -16,6 +16,8 @@ from tqdm import tqdm
 from deeprobust.graph import utils
 from deeprobust.graph.global_attack import BaseAttack
 
+from deeprobust.graph.myutils import calc_acc, save_all
+
 
 class BaseMeta(BaseAttack):
     """Abstract base class for meta attack. Adversarial Attacks on Graph Neural
@@ -276,7 +278,7 @@ class Metattack(BaseMeta):
             if self.with_bias:
                 self.biases = [b - self.lr * v for b, v in zip(self.biases, self.b_velocities)]
 
-    def get_meta_grad(self, features, adj_norm, ori_e, ori_v, idx_train, idx_unlabeled, labels, labels_self_training):
+    def get_meta_grad(self, features, adj_norm, ori_e, ori_v, idx_train, idx_unlabeled, labels, labels_self_training, epoch, verbose=False):
 
         hidden = features
         for ix, w in enumerate(self.weights):
@@ -301,23 +303,33 @@ class Metattack(BaseMeta):
         else:
             attack_loss = self.lambda_ * loss_labeled + (1 - self.lambda_) * loss_unlabeled
 
-        norm = torch.norm(ori_e)
-        regularization = 0
+        eigen_norm = torch.norm(ori_e)
+        eigen_mse = 0
         # New: add regularization term for spectral distance
         if self.regularization_weight != 0:
             e, v = torch.symeig(adj_norm, eigenvectors=True)
-            regularization = F.mse_loss(ori_e, e)
-        regu_loss = regularization / norm * self.regularization_weight
+            eigen_mse = F.mse_loss(ori_e, e, reduction='sum')
+        reg_loss = eigen_mse / eigen_norm * self.regularization_weight
+       
+        if verbose and epoch%10 == 0:
+            print ('-- Epoch {}, '.format(epoch), 
+                    'classification loss = {:.4f} | '.format(attack_loss.item()),
+                    'reg loss = {:.8f} | '.format(reg_loss),
+                    'eigen_mse = {:.8f} | '.format(eigen_mse),
+                    'eigen_norm = {:.4f}'.format(eigen_norm))
+
+            loss_test, acc_test = calc_acc(output, labels, idx_unlabeled)
+            loss_train, acc_train = calc_acc(output, labels, idx_train)
+
+            print("-- Before final discretize: train loss = {:.4f} | ".format(loss_train),
+                "train acc = {:.4f} | ".format(acc_train),
+                "unlabeled loss = {:.4f} | ".format(loss_test),
+                "unlabeled acc = {:.4f} | ".format(acc_test))
+
+            print('-- GCN loss on unlabled data: {}'.format(loss_test_val.item()))
+            print('-- GCN acc on unlabled data: {}'.format(utils.accuracy(output[idx_unlabeled], labels[idx_unlabeled]).item()))
         
-
-        print('GCN loss on unlabled data: {}'.format(loss_test_val.item()))
-        print('GCN acc on unlabled data: {}'.format(utils.accuracy(output[idx_unlabeled], labels[idx_unlabeled]).item()))
-        print('attack loss = {} | reg_loss = {} | norm = {} | eigen_mse = {}'.format(attack_loss.item(), 
-                                                                                     regu_loss, 
-                                                                                     norm, 
-                                                                                     regularization))
-
-        attack_loss += regu_loss
+        attack_loss += reg_loss
 
         self.loss = attack_loss
 
@@ -326,9 +338,10 @@ class Metattack(BaseMeta):
             adj_grad = torch.autograd.grad(attack_loss, self.adj_changes, retain_graph=True)[0]
         if self.attack_features:
             feature_grad = torch.autograd.grad(attack_loss, self.feature_changes, retain_graph=True)[0]
+        
         return adj_grad, feature_grad
 
-    def attack(self, ori_features, ori_adj, labels, idx_train, idx_unlabeled, n_perturbations, ll_constraint=True, ll_cutoff=0.004):
+    def attack(self, ori_features, ori_adj, labels, idx_train, idx_unlabeled, n_perturbations, ll_constraint=True, ll_cutoff=0.004, verbose=False):
         """Generate n_perturbations on the input graph.
 
         Parameters
@@ -357,7 +370,7 @@ class Metattack(BaseMeta):
         """
 
         self.sparse_features = sp.issparse(ori_features)
-        ori_adj, ori_features, labels = utils.to_tensor(ori_adj, ori_features, labels, device=self.device)
+        # ori_adj, ori_features, labels = utils.to_tensor(ori_adj, ori_features, labels, device=self.device)
         ori_adj_norm = utils.normalize_adj_tensor(ori_adj, device=self.device)
         ori_e, ori_v = torch.symeig(ori_adj_norm, eigenvectors=True)
 
@@ -376,7 +389,9 @@ class Metattack(BaseMeta):
 
             self.inner_train(modified_features, adj_norm, idx_train, idx_unlabeled, labels)
 
-            adj_grad, feature_grad = self.get_meta_grad(modified_features, adj_norm, ori_e, ori_v, idx_train, idx_unlabeled, labels, labels_self_training)
+            adj_grad, feature_grad = self.get_meta_grad(modified_features, adj_norm, ori_e, ori_v, 
+                                                        idx_train, idx_unlabeled, labels, labels_self_training, 
+                                                        i, verbose)
 
             adj_meta_score = torch.tensor(0.0).to(self.device)
             feature_meta_score = torch.tensor(0.0).to(self.device)
@@ -488,15 +503,15 @@ class MetaApprox(BaseMeta):
 
         self.optimizer = optim.Adam(self.weights + self.biases, lr=self.lr)
 
-    def inner_train(self, features, modified_adj, ori_e, ori_v, idx_train, idx_unlabeled, labels, labels_self_training):
+    def inner_train(self, features, modified_adj, ori_e, ori_v, idx_train, idx_unlabeled, labels, labels_self_training, epoch, verbose=False,):
         adj_norm = utils.normalize_adj_tensor(modified_adj, device=self.device)
-        norm = torch.norm(ori_e)
-        regularization = 0
+        eigen_norm = torch.norm(ori_e)
+        eigen_mse = 0
         # New: add regularization term for spectral distance
         if self.regularization_weight != 0:
             e, v = torch.symeig(adj_norm, eigenvectors=True)
-            regularization = F.mse_loss(ori_e, e)
-        regu_loss = regularization / norm * self.regularization_weight
+            eigen_mse = F.mse_loss(ori_e, e, reduction='sum')
+        reg_loss = eigen_mse / eigen_norm * self.regularization_weight
 
         for j in range(self.train_iters):
             # hidden = features
@@ -530,14 +545,8 @@ class MetaApprox(BaseMeta):
                 attack_loss = self.lambda_ * loss_labeled + (1 - self.lambda_) * loss_unlabeled
 
             loss_test_val = F.nll_loss(output[idx_unlabeled], labels[idx_unlabeled])
-            print('GCN loss on unlabled data: {}'.format(loss_test_val.item()))
-            print('GCN acc on unlabled data: {}'.format(utils.accuracy(output[idx_unlabeled], labels[idx_unlabeled]).item()))
-            print('attack loss = {} | reg_loss = {} | norm = {} | eigen_mse = {}'.format(attack_loss.item(), 
-                                                                                     regu_loss, 
-                                                                                     norm, 
-                                                                                     regularization))
-
-            attack_loss += regu_loss
+            
+            attack_loss += reg_loss
             self.loss = attack_loss
 
             self.optimizer.zero_grad()
@@ -552,7 +561,26 @@ class MetaApprox(BaseMeta):
 
             self.optimizer.step()
 
-    def attack(self, ori_features, ori_adj, labels, idx_train, idx_unlabeled, n_perturbations, ll_constraint=True, ll_cutoff=0.004):
+        if verbose and epoch%10 == 0:
+            print ('-- Epoch {}, '.format(epoch), 
+                    'classification loss = {:.4f} | '.format(attack_loss.item()-reg_loss),
+                    'reg loss = {:.8f} | '.format(reg_loss),
+                    'eigen_mse = {:.8f} | '.format(eigen_mse),
+                    'eigen_norm = {:.4f}'.format(eigen_norm))
+
+            loss_test, acc_test = calc_acc(output, labels, idx_unlabeled)
+            loss_train, acc_train = calc_acc(output, labels, idx_train)
+
+            print("-- Before final discretize: train loss = {:.4f} | ".format(loss_train),
+                "train acc = {:.4f} | ".format(acc_train),
+                "unlabeled loss = {:.4f} | ".format(loss_test),
+                "unlabeled acc = {:.4f} | ".format(acc_test))
+
+            print('-- GCN loss on unlabled data: {}'.format(loss_test_val.item()))
+            print('-- GCN acc on unlabled data: {}'.format(utils.accuracy(output[idx_unlabeled], labels[idx_unlabeled]).item()))
+
+
+    def attack(self, ori_features, ori_adj, labels, idx_train, idx_unlabeled, n_perturbations, ll_constraint=True, ll_cutoff=0.004, verbose=False):
         """Generate n_perturbations on the input graph.
 
         Parameters
@@ -579,7 +607,7 @@ class MetaApprox(BaseMeta):
             is False.
 
         """
-        ori_adj, ori_features, labels = utils.to_tensor(ori_adj, ori_features, labels, device=self.device)
+        # ori_adj, ori_features, labels = utils.to_tensor(ori_adj, ori_features, labels, device=self.device)
         ori_adj_norm = utils.normalize_adj_tensor(ori_adj, device=self.device)
         ori_e, ori_v = torch.symeig(ori_adj_norm, eigenvectors=True)
 
@@ -598,7 +626,7 @@ class MetaApprox(BaseMeta):
                 modified_features = ori_features + self.feature_changes
                 self.feature_grad_sum.data.fill_(0)
 
-            self.inner_train(modified_features, modified_adj, ori_e, ori_v, idx_train, idx_unlabeled, labels, labels_self_training)
+            self.inner_train(modified_features, modified_adj, ori_e, ori_v, idx_train, idx_unlabeled, labels, labels_self_training, i, verbose)
 
             adj_meta_score = torch.tensor(0.0).to(self.device)
             feature_meta_score = torch.tensor(0.0).to(self.device)

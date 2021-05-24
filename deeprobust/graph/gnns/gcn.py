@@ -189,7 +189,7 @@ class GCN(nn.Module):
         self.features = features
         self.labels = labels
 
-        if idx_val is None:
+        if idx_val is None or patience > 1000:
             self._train_without_val(labels, idx_train, train_iters, verbose)
         else:
             if patience < train_iters:
@@ -295,7 +295,7 @@ class GCN(nn.Module):
              print('=== early stopping at {0}, loss_val = {1} ==='.format(i, best_loss_val) )
         self.load_state_dict(weights)
 
-    def test(self, idx_test):
+    def test(self, idx_test, dropout=0.0):
         """Evaluate GCN performance on test set.
 
         Parameters
@@ -304,6 +304,8 @@ class GCN(nn.Module):
             node testing indices
         """
         self.eval()
+        self.dropout = dropout
+
         output = self.predict()
         # output = self.output
         loss_test = F.nll_loss(output[idx_test], self.labels[idx_test])
@@ -313,7 +315,7 @@ class GCN(nn.Module):
               "accuracy= {:.4f}".format(acc_test.item()))
         return acc_test.item()
 
-    def predict(self, features=None, adj=None):
+    def predict(self, features=None, adj=None, dropout=0.0):
         """By default, the inputs should be unnormalized adjacency
 
         Parameters
@@ -331,6 +333,8 @@ class GCN(nn.Module):
         """
 
         self.eval()
+        self.dropout = dropout
+
         if features is None and adj is None:
             return self.forward(self.features, self.adj_norm)
         else:

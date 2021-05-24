@@ -1,3 +1,4 @@
+import torch
 import numpy as np
 import scipy.sparse as sp
 import os.path as osp
@@ -6,7 +7,9 @@ import urllib.request
 import sys
 import pickle as pkl
 import networkx as nx
-from deeprobust.graph.utils import get_train_val_test, get_train_val_test_gcn
+
+from deeprobust.graph.utils import *
+
 import zipfile
 
 class Dataset():
@@ -66,8 +69,25 @@ class Dataset():
         self.require_lcc = True if setting == 'nettack' else False
         self.adj, self.features, self.labels = self.load_data()
         self.idx_train, self.idx_val, self.idx_test = self.get_train_val_test()
+
         if self.require_mask:
             self.get_mask()
+
+    def process(self, process_adj=False, process_feature=False, device='cpu'):
+        """Convert adj, features, labels from array or sparse matrix to
+        torch Tensor, and normalize the input data.
+        """
+
+        # Normalization
+        adj = normalize_adj(self.adj) if process_adj else self.adj
+        features = normalize_feature(self.features) if process_feature else self.features
+        labels = torch.LongTensor(self.labels)
+
+        # to tensor
+        features = torch.FloatTensor(np.array(features.todense()))
+        adj = torch.LongTensor(adj.todense())
+ 
+        return adj.to(device), features.to(device), labels.to(device)
 
     def get_train_val_test(self):
         """Get training, validation, test splits according to self.setting (either 'nettack' or 'gcn').

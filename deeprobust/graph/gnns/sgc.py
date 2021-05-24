@@ -60,6 +60,10 @@ class SGC(torch.nn.Module):
         assert device is not None, "Please specify 'device'!"
         self.device = device
 
+        self.nfeat = nfeat
+        self.hidden_sizes = [K]
+        self.nclass = nclass
+
         self.conv1 = SGConv(nfeat,
                 nclass, bias=with_bias, K=K, cached=cached)
 
@@ -102,8 +106,37 @@ class SGC(torch.nn.Module):
             self.initialize()
 
         self.data = pyg_data[0].to(self.device)
-        # By default, it is trained with early stopping on validation
-        self.train_with_early_stopping(train_iters, patience, verbose)
+
+        if patience > 1000:
+            self.train_without_val(train_iters, verbose)
+        else:
+            # By default, it is trained with early stopping on validation
+            self.train_with_early_stopping(train_iters, patience, verbose)
+
+    def train_without_val(self, train_iters, verbose):
+        """No early stopping
+        """
+        if verbose:
+            print('=== training GAT model ===')
+        optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+        labels = self.data.y
+        train_mask, val_mask = self.data.train_mask, self.data.val_mask
+
+        for i in range(train_iters):
+            self.train()
+            optimizer.zero_grad()
+            output = self.forward(self.data)
+
+            loss_train = F.nll_loss(output[train_mask], labels[train_mask])
+            loss_train.backward()
+            optimizer.step()
+
+            if verbose and i % 10 == 0:
+                print('Epoch {}, training loss: {}'.format(i, loss_train.item()))
+
+        self.eval()
+        self.output = self.forward(self.data)
 
     def train_with_early_stopping(self, train_iters, patience, verbose):
         """early stopping based on the validation loss
@@ -148,7 +181,7 @@ class SGC(torch.nn.Module):
              print('=== early stopping at {0}, loss_val = {1} ==='.format(i, best_loss_val) )
         self.load_state_dict(weights)
 
-    def test(self):
+    def test(self, dropout):
         """Evaluate SGC performance on test set.
 
         Parameters
@@ -157,6 +190,8 @@ class SGC(torch.nn.Module):
             node testing indices
         """
         self.eval()
+        self.dropout = dropout
+
         test_mask = self.data.test_mask
         labels = self.data.y
         output = self.forward(self.data)
@@ -168,7 +203,7 @@ class SGC(torch.nn.Module):
               "accuracy= {:.4f}".format(acc_test.item()))
         return acc_test.item()
 
-    def predict(self):
+    def predict(self, pyg_data=None, dropout=0.0):
         """
         Returns
         -------
@@ -177,7 +212,15 @@ class SGC(torch.nn.Module):
         """
 
         self.eval()
-        return self.forward(self.data)
+        self.dropout = dropout
+
+        if pyg_data == None:
+            data = self.data
+        else:
+            data = pyg_data[0].to(self.device)
+        
+        self.data = data
+        return self.forward(data)
 
 
 if __name__ == "__main__":

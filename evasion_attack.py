@@ -8,9 +8,9 @@ import argparse
 import pickle as pkl
 import copy
 
-from deeprobust.graph.gnns import GCN
+from deeprobust.graph.gnns import GCN, GAT, SGC
 from deeprobust.graph.utils import *
-from deeprobust.graph.data import Dataset
+from deeprobust.graph.data import Dataset, Dpr2Pyg
 
 from deeprobust.graph.global_attack import SpectralAttack, MinMaxSpectral
 from deeprobust.graph.global_attack import IGAttack
@@ -29,11 +29,16 @@ parser.add_argument('--data_seed', type=int, default=123,
 parser.add_argument('--dataset', type=str, default='cora', 
                     choices=['blogcatalog', 'cora', 'cora_ml', 'citeseer', 'polblogs', 'pubmed'], 
                     help='dataset')
-parser.add_argument('--model_path', type=str, required=True,
+
+parser.add_argument('--gnn_path', type=str, required=True,
                     help='Path of saved model.')
 
+parser.add_argument('--model', type=str, default='PGD', 
+                    choices=['PGD', 'min-max'], 
+                    help='model variant')
 parser.add_argument('--loss_type', type=str, default='CE', 
                     choices=['CE', 'CW'], help='loss type')
+
 parser.add_argument('--att_lr', type=float, default=200,
                     help='Initial learning rate.')
 parser.add_argument('--perturb_epochs', type=int, default=100,
@@ -53,9 +58,6 @@ parser.add_argument('--hidden', type=int, default=32,
 parser.add_argument('--dropout', type=float, default=0.0,
                     help='Dropout rate (1 - keep probability).')
 
-parser.add_argument('--model', type=str, default='PGD', 
-                    choices=['PGD', 'min-max'], 
-                    help='model variant')
 parser.add_argument('--target_node', type=str, default='test', 
                     choices=['test', 'train', 'both'], help='target nodes to attack')
 
@@ -88,6 +90,7 @@ np.random.seed(args.seed)
 torch.manual_seed(args.seed)
 if device != 'cpu':
     torch.cuda.manual_seed(args.seed)
+print ('  torch seed: ', args.seed)
 
 #########################################################
 # Load data for node classification task
@@ -96,11 +99,10 @@ seed = None if args.data_seed == 0 else args.data_seed
 if not osp.exists(args.data_dir):
     os.makedirs(args.data_dir)
 data = Dataset(root=args.data_dir, name=args.dataset, setting='gcn', seed=seed)
-adj, features, labels = data.adj, data.features, data.labels
+adj, features, labels = data.process(process_adj=False, process_feature=False, device=device)
 idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test
 idx_unlabeled = np.union1d(idx_val, idx_test)
 
-adj, features, labels = preprocess(adj, features, labels, preprocess_adj=False)
 
 print ('  adj shape: ', adj.shape)
 print ('  feature shape: ', features.shape)
@@ -123,8 +125,8 @@ if not osp.exists(args.model_path):
 victim_model.load_state_dict(torch.load(args.model_path))
 victim_model.eval()
 
-print ('==== GCN natural performance ====')
-output = victim_model.predict(features, adj).cpu()
+print ('==== GNN natural performance ====')
+output = victim_model.predict(features, adj)
 loss_test_clean, acc_test_clean = calc_acc(output, labels, idx_test)
 loss_train_clean, acc_train_clean = calc_acc(output, labels, idx_train)
 print("-- train loss = {:.4f} | ".format(loss_train_clean),
@@ -184,16 +186,16 @@ for s in seeds:
     modified_adj = model.modified_adj
     
     # evaluation
-    print ('==== Victim GCN performance on perturbed graph ====')
+    print ('==== Victim GNN performance on perturbed graph ====')
     modified_adj = model.modified_adj
 
     victim_model.load_state_dict(torch.load(args.model_path)) # reset to clean model
     victim_model.eval()
-    output = victim_model.predict(features, modified_adj).cpu()
+    output = victim_model.predict(features, modified_adj)
     loss_test, acc_test = calc_acc(output, labels, idx_test)
     loss_train, acc_train = calc_acc(output, labels, idx_train)
 
-    print ('==== GCN attack performance ====')
+    print ('==== GNN attack performance ====')
     print("-- train loss = {:.4f}->{:.4f} | ".format(loss_train_clean, loss_train),
           "train acc = {:.4f}->{:.4f} | ".format(acc_train_clean, acc_train),
           "test loss = {:.4f}->{:.4f} | ".format(loss_test_clean, loss_test),
@@ -202,9 +204,9 @@ for s in seeds:
     acc.append(acc_test)
 
     # # if you want to save the modified adj/features, uncomment the code below
-    root = './sanitycheck_evasion/{}_{}_{}lr_{}epoch_{}rate_{}reg_{}_{}target'.format( 
-             args.dataset, args.loss_type, args.att_lr, args.perturb_epochs, args.ptb_rate, 
-             args.reg_weight, args.model, args.target_node)
+    root = './sanitycheck_evasion/{}_{}_{}_{}lr_{}epoch_{}rate_{}reg_{}target'.format( 
+             args.dataset, args.model, args.loss_type, args.att_lr, args.perturb_epochs, args.ptb_rate, 
+             args.reg_weight, args.target_node)
 
     # uncomment the the following line to store intermediate results
     if args.sanitycheck == 'yes':

@@ -54,8 +54,7 @@ class GAT(nn.Module):
               nclass=labels.max().item() + 1,
               dropout=0.5, device='cpu')
     >>> gat = gat.to('cpu')
-    >>> pyg_data = Dpr2Pyg(data) # convert deeprobust dataset to pyg dataset
-    >>> gat.fit(pyg_data, patience=100, verbose=True) # train with earlystopping
+    >>> gat.fit(data.geodata, patience=100, verbose=True) # train with earlystopping
     """
 
     def __init__(self, nfeat, nhid, nclass, heads=8, output_heads=1, dropout=0.5, lr=0.01,
@@ -65,6 +64,10 @@ class GAT(nn.Module):
 
         assert device is not None, "Please specify 'device'!"
         self.device = device
+
+        self.nfeat = nfeat
+        self.hidden_sizes = [nhid]
+        self.nclass = nclass
 
         self.conv1 = GATConv(
             nfeat,
@@ -90,6 +93,9 @@ class GAT(nn.Module):
 
     def forward(self, data):
         x, edge_index = data.x, data.edge_index
+
+        print (x.shape, edge_index.shape)
+
         x = F.dropout(x, p=self.dropout, training=self.training)
         x = F.elu(self.conv1(x, edge_index))
         x = F.dropout(x, p=self.dropout, training=self.training)
@@ -102,14 +108,14 @@ class GAT(nn.Module):
         self.conv1.reset_parameters()
         self.conv2.reset_parameters()
 
-    def fit(self, pyg_data, train_iters=1000, initialize=True, verbose=False, patience=100, **kwargs):
+    def fit(self, geodata, train_iters=1000, initialize=True, verbose=False, patience=100, **kwargs):
         """Train the GAT model, when idx_val is not None, pick the best model
         according to the validation loss.
 
         Parameters
         ----------
-        pyg_data :
-            pytorch geometric dataset object
+        geodata :
+            pytorch geometric Data object
         train_iters : int
             number of training epochs
         initialize : bool
@@ -120,15 +126,89 @@ class GAT(nn.Module):
             patience for early stopping, only valid when `idx_val` is given
         """
 
-        self.device = self.conv1.weight.device
+        # self.device = self.conv1.weight.device
         if initialize:
             self.initialize()
 
-        self.data = pyg_data[0].to(self.device)
-        # By default, it is trained with early stopping on validation
-        self.train_with_early_stopping(train_iters, patience, verbose)
+        self.data = geodata.to(self.device)
 
-    def train_with_early_stopping(self, train_iters, patience, verbose):
+        # use patience to control whether to use early stopping on validation
+        if patience > 1000:
+            self._train_without_val(train_iters, verbose)
+        else:
+            if patience < train_iters:
+                self._train_with_early_stopping(train_iters, patience, verbose)
+            else:
+                self._train_with_val(train_iters, patience, verbose)
+
+    def _train_without_val(self, train_iters, verbose):
+        """No early stopping
+        """
+        if verbose:
+            print('=== training GAT model ===')
+        optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+        labels = self.data.y
+        train_mask, val_mask = self.data.train_mask, self.data.val_mask
+
+        for i in range(train_iters):
+            self.train()
+            optimizer.zero_grad()
+            output = self.forward(self.data)
+
+            loss_train = F.nll_loss(output[train_mask], labels[train_mask])
+            loss_train.backward()
+            optimizer.step()
+
+            if verbose and i % 10 == 0:
+                print('Epoch {}, training loss: {}'.format(i, loss_train.item()))
+
+        self.eval()
+        self.output = self.forward(self.data)
+
+    def _train_with_val(self, train_iters, patience, verbose):
+        if verbose:
+            print('=== training GAT model ===')
+        optimizer = optim.Adam(self.parameters(), lr=self.lr, weight_decay=self.weight_decay)
+
+        labels = self.data.y
+        train_mask, val_mask = self.data.train_mask, self.data.val_mask
+
+        best_loss_val = 100
+        best_acc_val = 0
+
+        for i in range(train_iters):
+            self.train()
+            optimizer.zero_grad()
+            output = self.forward(self.data)
+
+            loss_train = F.nll_loss(output[train_mask], labels[train_mask])
+            loss_train.backward()
+            optimizer.step()
+
+            if verbose and i % 10 == 0:
+                print('Epoch {}, training loss: {}'.format(i, loss_train.item()))
+
+            self.eval()
+            output = self.forward(self.data)
+            loss_val = F.nll_loss(output[val_mask], labels[val_mask])
+            acc_val = utils.accuracy(output[val_mask], labels[val_mask])
+
+            if best_loss_val > loss_val:
+                best_loss_val = loss_val
+                self.output = output
+                weights = deepcopy(self.state_dict())
+
+            if acc_val > best_acc_val:
+                best_acc_val = acc_val
+                self.output = output
+                weights = deepcopy(self.state_dict())
+
+        if verbose:
+            print('=== picking the best model according to the performance on validation ===')
+        self.load_state_dict(weights)
+
+    def _train_with_early_stopping(self, train_iters, patience, verbose):
         """early stopping based on the validation loss
         """
         if verbose:
@@ -171,7 +251,7 @@ class GAT(nn.Module):
              print('=== early stopping at {0}, loss_val = {1} ==='.format(i, best_loss_val) )
         self.load_state_dict(weights)
 
-    def test(self):
+    def test(self, dropout=0.0):
         """Evaluate GAT performance on test set.
 
         Parameters
@@ -180,6 +260,8 @@ class GAT(nn.Module):
             node testing indices
         """
         self.eval()
+        self.dropout = dropout
+
         test_mask = self.data.test_mask
         labels = self.data.y
         output = self.forward(self.data)
@@ -191,7 +273,7 @@ class GAT(nn.Module):
               "accuracy= {:.4f}".format(acc_test.item()))
         return acc_test.item()
 
-    def predict(self):
+    def predict(self, geodata=None, dropout=0.0):
         """
         Returns
         -------
@@ -200,14 +282,17 @@ class GAT(nn.Module):
         """
 
         self.eval()
+        self.dropout = dropout
+
+        self.data = self.data if geodata==None else geodata.to(self.device)
+        
         return self.forward(self.data)
 
 
-
 if __name__ == "__main__":
-    from deeprobust.graph.data import Dataset, Dpr2Pyg
+    from deeprobust.graph.data import Dataset
     # from deeprobust.graph.defense import GAT
-    data = Dataset(root='/tmp/', name='cora')
+    data = Dataset(root='./tmp/', name='cora', setting='gcn')
     adj, features, labels = data.adj, data.features, data.labels
     idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test
     gat = GAT(nfeat=features.shape[1],
@@ -215,8 +300,7 @@ if __name__ == "__main__":
           nclass=labels.max().item() + 1,
           dropout=0.5, device='cpu')
     gat = gat.to('cpu')
-    pyg_data = Dpr2Pyg(data)
-    gat.fit(pyg_data, verbose=True) # train with earlystopping
+    gat.fit(data.geodata, verbose=True) # train with earlystopping
     gat.test()
     print(gat.predict())
 
