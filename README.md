@@ -13,7 +13,11 @@ You can train and save a clean model; attack a loaded model in both training tim
 <code> python -m nat_train --dataset cora --gnn_epochs 200 --lr 0.01 --model_dir ./nat_model_saved/ </code>
 
 #### Attack a Trained Model
-- evasion attack:
+Using the value of --reg_weight to control whether include the spectral distance term in the attack objective.
+For evasion attack: --model can choice from [PGD, random]
+For poisoning attack: --model can choice from [minmax, Meta-Self, Meta-Train, random]
+
+- evasion attack: 
 <code> python -m attack --dataset cora --ptb_rate 0.05 --reg_weight 0.0 --model PGD --target_node test --model_path ./nat_model_saved/cora_gcn.pt </code>
 
 - poisoning attack:
