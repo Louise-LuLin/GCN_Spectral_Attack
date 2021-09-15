@@ -14,7 +14,9 @@ You can train and save a clean model; attack a loaded model in both training tim
 
 #### Attack a Trained Model
 Using the value of --reg_weight to control whether include the spectral distance term in the attack objective.
+
 For evasion attack: --model can choice from [PGD, random]
+
 For poisoning attack: --model can choice from [minmax, Meta-Self, Meta-Train, random]
 
 - evasion attack: 
