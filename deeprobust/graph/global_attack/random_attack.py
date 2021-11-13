@@ -78,7 +78,8 @@ class Random(BaseAttack):
             perturbed adjacency matrix
         """
         # adj: sp.csr_matrix
-        modified_adj = adj.tolil()
+        # modified_adj = adj.tolil()
+        modified_adj = adj
 
         type = type.lower()
         assert type in ['add', 'remove', 'flip']
@@ -105,7 +106,7 @@ class Random(BaseAttack):
             modified_adj[indices[0], indices[1]] = 0
             modified_adj[indices[1], indices[0]] = 0
 
-        self.check_adj(modified_adj)
+        # self.check_adj(modified_adj.cpu())
         return modified_adj
 
     def perturb_features(self, features, n_perturbations):

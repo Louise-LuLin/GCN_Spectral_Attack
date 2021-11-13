@@ -14,6 +14,11 @@ def calc_acc(output, labels, idx):
     acc = accuracy(output[idx], labels[idx])
     return loss.item(), acc.item()
 
+def save_utility(root, utility):
+    with open(root, "wb") as output_file:
+        pkl.dump(utility, output_file)
+    print ('==== utility saved to {} ===='.format(root))
+
 def save_all(root, model):
     ''' Save intermediate results '''
     

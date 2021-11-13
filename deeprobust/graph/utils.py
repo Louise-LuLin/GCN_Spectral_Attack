@@ -223,6 +223,9 @@ def normalize_adj_tensor(adj, sparse=False, device='cuda:0'):
         mx = mx @ r_mat_inv
     return mx
 
+def check_symmetric(a, rtol=1e-05, atol=1e-08):
+    return np.allclose(a, a.T, rtol=rtol, atol=atol)
+
 def degree_normalize_adj(mx):
     """Row-normalize sparse matrix"""
     mx = mx.tolil()

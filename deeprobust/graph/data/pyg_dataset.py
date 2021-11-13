@@ -36,15 +36,19 @@ class Dpr2Pyg(InMemoryDataset):
 
     def __init__(self, dpr_data, transform=None, **kwargs):
         root = 'data/' # dummy root; does not mean anything
+
         self.dpr_data = dpr_data
         super(Dpr2Pyg, self).__init__(root, transform)
-        pyg_data = self.process()
-        self.data, self.slices = self.collate([pyg_data])
+
+        self.pyg_data = self.process()
+        self.data, self.slices = self.collate([self.pyg_data])
+
         self.transform = transform
 
     def process(self):
         dpr_data = self.dpr_data
         edge_index = torch.LongTensor(dpr_data.adj.nonzero())
+
         # by default, the features in pyg data is dense
         if sp.issparse(dpr_data.features):
             x = torch.FloatTensor(dpr_data.features.todense()).float()
@@ -52,6 +56,7 @@ class Dpr2Pyg(InMemoryDataset):
             x = torch.FloatTensor(dpr_data.features).float()
         y = torch.LongTensor(dpr_data.labels)
         idx_train, idx_val, idx_test = dpr_data.idx_train, dpr_data.idx_val, dpr_data.idx_test
+
         data = Data(x=x, edge_index=edge_index, y=y)
         train_mask = index_to_mask(idx_train, size=y.size(0))
         val_mask = index_to_mask(idx_val, size=y.size(0))
@@ -59,6 +64,7 @@ class Dpr2Pyg(InMemoryDataset):
         data.train_mask = train_mask
         data.val_mask = val_mask
         data.test_mask = test_mask
+
         return data
 
     def update_edge_index(self, adj):
@@ -70,7 +76,14 @@ class Dpr2Pyg(InMemoryDataset):
         adj: sp.csr_matrix
             update the original adjacency into adj (by change edge_index)
         """
-        self.data.edge_index = torch.LongTensor(adj.nonzero())
+        # self.pyg_data.edge_index = torch.LongTensor(adj.nonzero())
+        # self.data, self.slices = self.collate([self.pyg_data])
+
+        if isinstance(adj, torch.Tensor): # when adj is tensor
+            self.data.edge_index = torch.transpose( torch.LongTensor(adj.nonzero()), 0, 1 )
+        else: # when adj is numpy
+            self.data.edge_index = torch.LongTensor(adj.nonzero())
+            
         self.data, self.slices = self.collate([self.data])
 
     def get(self, idx):
