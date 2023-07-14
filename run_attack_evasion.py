@@ -13,7 +13,6 @@ from spac.gnns import GCN
 from spac.data_loader import Dataset
 from spac.utils import calc_acc, save_all, save_utility
 
-from spac.global_attack import SpectralAttack
 from spac.global_attack import PGDAttack, MinMax
 from spac.global_attack import MetaApprox, Metattack
 from spac.global_attack import Random, DICE

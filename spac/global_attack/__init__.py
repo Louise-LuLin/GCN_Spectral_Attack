@@ -8,7 +8,6 @@ from .dice import DICE
 from .mettack import MetaApprox, Metattack
 from .random_attack import Random
 from .topology_attack import PGDAttack, MinMax
-from .spectral_attack import SpectralAttack
 
 __all__ = ['BaseAttack', 
            'DICE', 
@@ -16,5 +15,4 @@ __all__ = ['BaseAttack',
            'Metattack', 
            'Random', 
            'PGDAttack',
-           'MinMax',
-           'SpectralAttack']
+           'MinMax']
