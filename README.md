@@ -30,19 +30,8 @@ By default, the clean model will be saved at **./log/nat_model_saved/cora_GCN.pt
 
 When pairing SPAC with other attacks, the argument **--spac_weight** controls the strength of SPAC term, and **--loss_weight** controls the other attack's task loss term.  
 
-- For evasion attack: --attacker can choice from [PGD, random]
-- For poisoning attack: --attacker can choice from [minmax, Meta-Self, Meta-Train, random]
-
-#### Evasion Attack
-Run SPAC (spectral attack) alone: 
-```
-python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 0.0 
-```
-
-Run SPAC-CE (PGD-CE paired with SPAC):
-```
-python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 1.0
-```
+- For poisoning attack: --attacker can choose from [minmax, Meta-Self, Meta-Train, random]
+- For evasion attack: --attacker can choose from [PGD, random]
 
 #### Poisoning Attack
 Run SPAC (spectral attack) alone: 
@@ -53,6 +42,17 @@ python run_attack_poison.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_
 Run SPAC-Min (Max-Min paired with SPAC):
 ```
 python run_attack_poison.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 1.0 
+```
+
+#### Evasion Attack
+Run SPAC (spectral attack) alone: 
+```
+python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 0.0 
+```
+
+Run SPAC-CE (PGD-CE paired with SPAC):
+```
+python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 1.0
 ```
 
 ## Cite
