@@ -6,12 +6,12 @@ This is the code for the paper "Graph Structural Attack by Perturbing Spectral D
 
 Code is tested in **Python 3.10.10**. Some major requirements are listed below:
 ```
-$pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu117
-$pip install torch_geometric
-$pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-1.13.0+cu117.html
-$pip install dgl
-$pip install networkx
-$pip install numba
+pip install torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu117
+pip install torch_geometric
+pip install pyg_lib torch_scatter torch_sparse torch_cluster torch_spline_conv -f https://data.pyg.org/whl/torch-1.13.0+cu117.html
+pip install dgl
+pip install networkx
+pip install numba
 ```
 
 ## Run the code
@@ -20,7 +20,9 @@ To execute the attack, you will first train and save a clean model; then attack 
 The following example commands on Cora data are run under the root folder.
 
 ### Train a Clean Model
-<code> python run_train_nat.py --dataset cora --gnn_epochs 200 --lr 0.01 </code>
+```
+python run_train_nat.py --dataset cora --gnn_epochs 200 --lr 0.01
+```
 
 By default, the clean model will be saved at **./log/nat_model_saved/cora_GCN.pt**
 
@@ -34,22 +36,22 @@ When pairing SPAC with other attacks, the argument **--spac_weight** controls th
 #### Evation Attack
 Run SPAC (spectral attack) alone: 
 ```
-$python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 0.0 
+python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 0.0 
 ```
 
 Run SPAC-CE (PGD-CE paired with SPAC):
 ```
-$python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 1.0
+python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 1.0
 ```
 
 #### Poisoning Attack
 Run SPAC (spectral attack) alone: 
 ```
-$python run_attack_poison.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 0.0 
+python run_attack_poison.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 0.0 
 ```
 
 Run SPAC-Min (Max-Min paired with SPAC):
 ```
-$python run_attack_poison.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 1.0 
+python run_attack_poison.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 1.0 
 ```
 
