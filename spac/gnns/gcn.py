@@ -8,7 +8,7 @@ from torch.nn.modules.module import Module
 from copy import deepcopy
 from sklearn.metrics import f1_score
 
-from deeprobust.graph import utils
+from spac import utils
 
 class GraphConvolution(Module):
     """Simple GCN layer, similar to https://github.com/tkipf/pygcn
@@ -75,23 +75,6 @@ class GCN(nn.Module):
     device: str
         'cpu' or 'cuda'.
 
-    Examples
-    --------
-	We can first load dataset and then train GCN.
-
-    >>> from deeprobust.graph.data import Dataset
-    >>> from deeprobust.graph.defense import GCN
-    >>> data = Dataset(root='/tmp/', name='cora')
-    >>> adj, features, labels = data.adj, data.features, data.labels
-    >>> idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test
-    >>> gcn = GCN(nfeat=features.shape[1],
-              nhid=16,
-              nclass=labels.max().item() + 1,
-              dropout=0.5, device='cpu')
-    >>> gcn = gcn.to('cpu')
-    >>> gcn.fit(features, adj, labels, idx_train) # train without earlystopping
-    >>> gcn.fit(features, adj, labels, idx_train, idx_val, patience=30) # train with earlystopping
-    >>> gcn.test(idx_test)
     """
 
     def __init__(self, nfeat, nhid, nclass, dropout=0.5, lr=0.01, weight_decay=5e-4,

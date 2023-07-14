@@ -318,7 +318,7 @@ def parse_index_file(filename):
 
 
 if __name__ == '__main__':
-    from deeprobust.graph.data import Dataset
+    from spac.data_loader import Dataset
     data = Dataset(root='./tmp/', name='flickr')
     adj, features, labels = data.adj, data.features, data.labels
     idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test

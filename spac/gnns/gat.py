@@ -11,7 +11,8 @@ from torch.nn.modules.module import Module
 from copy import deepcopy
 from torch_geometric.nn import GATConv
 
-from deeprobust.graph import utils
+from spac.graph import utils
+from spac.data_loader import Dataset
 
 class GAT(nn.Module):
     """ 2 Layer Graph Attention Network based on pytorch geometric.
@@ -40,21 +41,6 @@ class GAT(nn.Module):
     device: str
         'cpu' or 'cuda'.
 
-    Examples
-    --------
-	We can first load dataset and then train GAT.
-
-    >>> from deeprobust.graph.data import Dataset
-    >>> from deeprobust.graph.defense import GAT
-    >>> data = Dataset(root='/tmp/', name='cora')
-    >>> adj, features, labels = data.adj, data.features, data.labels
-    >>> idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test
-    >>> gat = GAT(nfeat=features.shape[1],
-              nhid=8, heads=8,
-              nclass=labels.max().item() + 1,
-              dropout=0.5, device='cpu')
-    >>> gat = gat.to('cpu')
-    >>> gat.fit(data.geodata, patience=100, verbose=True) # train with earlystopping
     """
 
     def __init__(self, nfeat, nhid, nclass, heads=8, output_heads=1, dropout=0.5, lr=0.01,
@@ -290,8 +276,6 @@ class GAT(nn.Module):
 
 
 if __name__ == "__main__":
-    from deeprobust.graph.data import Dataset
-    # from deeprobust.graph.defense import GAT
     data = Dataset(root='./tmp/', name='cora', setting='gcn')
     adj, features, labels = data.adj, data.features, data.labels
     idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test

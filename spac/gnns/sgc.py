@@ -8,10 +8,12 @@ import torch
 import torch.optim as optim
 from torch.nn.parameter import Parameter
 from torch.nn.modules.module import Module
-from deeprobust.graph import utils
 from copy import deepcopy
 from torch_geometric.nn import SGConv
 
+from spac import utils
+from spac.data_loader import Dataset
+    
 class SGC(torch.nn.Module):
     """ SGC based on pytorch geometric. Simplifying Graph Convolutional Networks.
 
@@ -35,20 +37,6 @@ class SGC(torch.nn.Module):
     device: str
         'cpu' or 'cuda'.
 
-    Examples
-    --------
-	We can first load dataset and then train SGC.
-
-    >>> from deeprobust.graph.data import Dataset
-    >>> from deeprobust.graph.defense import SGC
-    >>> data = Dataset(root='/tmp/', name='cora')
-    >>> adj, features, labels = data.adj, data.features, data.labels
-    >>> idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test
-    >>> sgc = SGC(nfeat=features.shape[1], K=3, lr=0.1,
-              nclass=labels.max().item() + 1, device='cuda')
-    >>> sgc = sgc.to('cuda')
-    >>> pyg_data = Dpr2Pyg(data) # convert deeprobust dataset to pyg dataset
-    >>> sgc.fit(pyg_data, train_iters=200, patience=200, verbose=True) # train with earlystopping
     """
 
 
@@ -224,15 +212,14 @@ class SGC(torch.nn.Module):
 
 
 if __name__ == "__main__":
-    from deeprobust.graph.data import Dataset, Dpr2Pyg
-    # from deeprobust.graph.defense import SGC
+    
     data = Dataset(root='/tmp/', name='cora')
     adj, features, labels = data.adj, data.features, data.labels
     idx_train, idx_val, idx_test = data.idx_train, data.idx_val, data.idx_test
     sgc = SGC(nfeat=features.shape[1],
           nclass=labels.max().item() + 1, device='cpu')
     sgc = sgc.to('cpu')
-    pyg_data = Dpr2Pyg(data)
+    # pyg_data = Dpr2Pyg(data)
     sgc.fit(pyg_data, verbose=True) # train with earlystopping
     sgc.test()
     print(sgc.predict())
