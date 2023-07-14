@@ -19,23 +19,37 @@ $pip install numba
 To execute the attack, you will first train and save a clean model; then attack a loaded model in both training time (poisoning attack) and test time (evasion attack). 
 The following example commands on Cora data are run under the root folder.
 
-#### Train a Clean Model
+### Train a Clean Model
 <code> python run_train_nat.py --dataset cora --gnn_epochs 200 --lr 0.01 </code>
 
 By default, the clean model will be saved at **./log/nat_model_saved/cora_GCN.pt**
 
-#### Attack the Trained Model
+### Attack the Trained Model
 
-When pairing SPAC with other attacks, taking PGD-CE as an example, the argument **--spac_weight** controls the strength of SPAC term, and **--loss_weight** controls PGD-CE's task loss term.  
+When pairing SPAC with other attacks, the argument **--spac_weight** controls the strength of SPAC term, and **--loss_weight** controls the other attack's task loss term.  
 
-For evasion attack: --attacker can choice from [PGD, random]
+- For evasion attack: --attacker can choice from [PGD, random]
+- For poisoning attack: --attacker can choice from [minmax, Meta-Self, Meta-Train, random]
 
-For poisoning attack: --attacker can choice from [minmax, Meta-Self, Meta-Train, random]
+#### Evation Attack
+Run SPAC (spectral attack) alone: 
+```
+$python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 0.0 
+```
 
-- evasion attack via SPAC alone: 
-<code> python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 0.0 </code>
+Run SPAC-CE (PGD-CE paired with SPAC):
+```
+$python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 1.0
+```
 
-- poisoning attack:
-python run_attack_poison.py --gnn_path ./log/nat_model_saved/cora_GCN.pt
-<code> python -m poison_attack --dataset cora --ptb_rate 0.05 --reg_weight 0.0 --model minmax --model_path ./nat_model_saved/cora_gcn.pt </code>
+#### Poisoning Attack
+Run SPAC (spectral attack) alone: 
+```
+$python run_attack_poison.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 0.0 
+```
+
+Run SPAC-Min (Max-Min paired with SPAC):
+```
+$python run_attack_poison.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 1.0 
+```
 
