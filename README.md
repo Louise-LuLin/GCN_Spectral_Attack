@@ -33,7 +33,7 @@ When pairing SPAC with other attacks, the argument **--spac_weight** controls th
 - For evasion attack: --attacker can choice from [PGD, random]
 - For poisoning attack: --attacker can choice from [minmax, Meta-Self, Meta-Train, random]
 
-#### Evation Attack
+#### Evasion Attack
 Run SPAC (spectral attack) alone: 
 ```
 python run_attack_evasion.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 0.0 
@@ -55,3 +55,16 @@ Run SPAC-Min (Max-Min paired with SPAC):
 python run_attack_poison.py --gnn_path ./log/nat_model_saved/cora_GCN.pt --spac_weight 1.0 --loss_weight 1.0 
 ```
 
+## Cite
+
+Please cite our paper if you find this repo useful for your research or development.
+
+```
+@inproceedings{lin2022graph,
+  title={Graph structural attack by perturbing spectral distance},
+  author={Lin, Lu and Blaser, Ethan and Wang, Hongning},
+  booktitle={Proceedings of the 28th ACM SIGKDD Conference on Knowledge Discovery and Data Mining},
+  pages={989--998},
+  year={2022}
+}
+```
