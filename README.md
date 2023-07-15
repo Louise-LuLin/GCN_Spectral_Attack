@@ -1,6 +1,6 @@
 # SPAC
 
-This is the code for the paper "Graph Structural Attack by Perturbing Spectral Distance" accepted by KDD 2022.
+This is the code for the paper "[Graph Structural Attack by Perturbing Spectral Distance](https://arxiv.org/abs/2111.00684)" accepted by KDD 2022.
 
 ## Requirement
 
